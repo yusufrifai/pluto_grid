@@ -30,6 +30,7 @@ abstract class TextFieldProps {
 
 mixin TextCellState<T extends TextCell> on State<T> implements TextFieldProps {
   dynamic _initialCellValue;
+  bool _hasHandledFirstFocus = false;
 
   final _textController = TextEditingController();
 
@@ -64,6 +65,7 @@ mixin TextCellState<T extends TextCell> on State<T> implements TextFieldProps {
 
     _textController.addListener(() {
       _handleOnChanged(_textController.text.toString());
+      //_textController.selection = TextSelection.collapsed(offset: _textController.text.length);
     });
   }
 
@@ -73,6 +75,7 @@ mixin TextCellState<T extends TextCell> on State<T> implements TextFieldProps {
      * Saves the changed value when moving a cell while text is being input.
      * if user do not press enter key, onEditingComplete is not called and the value is not saved.
      */
+    cellFocus.removeListener(_onFocusChange);
     if (_cellEditingStatus.isChanged) {
       _changeValue();
     }
@@ -225,12 +228,23 @@ mixin TextCellState<T extends TextCell> on State<T> implements TextFieldProps {
     widget.stateManager.setKeepFocus(true);
   }
 
+  void _onFocusChange() {
+    if (cellFocus.hasFocus && !_hasHandledFirstFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _textController.selection = TextSelection.collapsed(offset: _textController.text.length);
+      });
+
+      _hasHandledFirstFocus = true;
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     if (widget.stateManager.keepFocus) {
       cellFocus.requestFocus();
     }
-
+    cellFocus.addListener(_onFocusChange);
     return TextField(
       focusNode: cellFocus,
       controller: _textController,

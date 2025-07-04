@@ -46,7 +46,13 @@ class PlutoTimeCellState extends State<PlutoTimeCell>
 
   String get cellHour => cellValue.toString().substring(0, 2);
 
-  String get cellMinute => cellValue.toString().substring(3, 5);
+  String get cellMinute {
+    try {
+      return cellValue.toString().substring(3, 5);
+    } catch (e) {
+      return '00'; // fallback jika error (misalnya string terlalu pendek)
+    }
+  }
 
   @override
   void openPopup() {
