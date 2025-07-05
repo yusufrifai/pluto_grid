@@ -556,9 +556,9 @@ class _ColumnTextWidgetState extends PlutoStateWithChange<_ColumnTextWidget> {
         children: _children,
       ),
       style: stateManager.configuration.style.columnTextStyle,
-      overflow: TextOverflow.ellipsis,
-      softWrap: false,
-      maxLines: 1,
+      overflow: TextOverflow.visible,  // ✅ IZINKAN MULTILINE
+      softWrap: true,                  // ✅ AKTIFKAN WRAP
+      maxLines: null,                  // ✅ IZINKAN BEBAS BARIS
       textAlign: widget.column.titleTextAlign.value,
     );
   }
