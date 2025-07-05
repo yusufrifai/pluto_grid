@@ -1,8 +1,9 @@
 import 'dart:async';
-
+import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pluto_grid/pluto_grid.dart';
+import 'package:collection/collection.dart'; // untuk firstWhereOrNull
 
 import '../ui.dart';
 
@@ -79,6 +80,41 @@ class PlutoColumnFilterState extends PlutoStateWithChange<PlutoColumnFilter> {
   @override
   PlutoGridStateManager get stateManager => widget.stateManager;
 
+  String _getFormattedValue(PlutoColumn column, String raw) {
+    if (column.field != FilterHelper.filterFieldValue) return raw;
+
+    final filterRows = stateManager.filterRows;
+
+    final currentFilterRow = filterRows.firstWhereOrNull(
+          (row) => row.cells[FilterHelper.filterFieldValue]?.value == raw,
+    );
+
+    if (currentFilterRow == null) return raw;
+
+    final columnField =
+        currentFilterRow.cells[FilterHelper.filterFieldColumn]?.value;
+    final targetColumn = stateManager.refColumns.firstWhereOrNull(
+          (col) => col.field == columnField,
+    );
+
+    if (targetColumn?.type is PlutoColumnTypeNumber) {
+      final number = int.tryParse(raw.replaceAll('.', '')) ?? 0;
+      return NumberFormat.decimalPattern('id_ID').format(number);
+    }
+
+    return raw;
+  }
+  String _format(String raw) {
+    if (raw.trim().isEmpty) return '';
+    final number = int.tryParse(raw.replaceAll('.', ''));
+    if (number == null) return '';
+    return NumberFormat.decimalPattern('id_ID').format(number);
+  }
+
+  String _unformat(String formatted) {
+    return formatted.replaceAll('.', '');
+  }
+
   @override
   initState() {
     super.initState();
@@ -87,7 +123,37 @@ class PlutoColumnFilterState extends PlutoStateWithChange<PlutoColumnFilter> {
 
     widget.column.setFilterFocusNode(_focusNode);
 
-    _controller = TextEditingController(text: _filterValue);
+    // _controller = TextEditingController(text: _filterValue);
+    final rawValue = _filterValue ?? '';
+    _controller = TextEditingController(
+      text: _getFormattedValue(widget.column, rawValue),
+    );
+    _controller.addListener(() {
+      final text = _controller.text;
+      final isNumber = widget.column.type is PlutoColumnTypeNumber;
+      if (isNumber) {
+        final raw = _unformat(text);
+        final formatted = _format(raw);
+
+        // Cegah loop tak berujung
+        if (_controller.text != formatted) {
+          _controller.value = _controller.value.copyWith(
+            text: formatted,
+            selection: TextSelection.collapsed(offset: formatted.length),
+          );
+
+          // Simpan raw ke dalam stateManager
+          final currentFilterRow = stateManager.filterRows.firstWhereOrNull(
+                (row) => row.cells['column']?.value == widget.column.field,
+          );
+
+          if (currentFilterRow != null) {
+            currentFilterRow.cells['value']?.value = raw;
+            stateManager.notifyListeners();
+          }
+        }
+      }
+    });
 
     _event = stateManager.eventManager!.listener(_handleFocusFromRows);
 
@@ -237,6 +303,18 @@ class PlutoColumnFilterState extends PlutoStateWithChange<PlutoColumnFilter> {
     // empty for ignore event of OnEditingComplete.
   }
 
+  bool get _isNumberColumn => widget.column.type is PlutoColumnTypeNumber;
+
+  String _formatNumber(String raw) {
+    if (raw.isEmpty) return '';
+    final number = int.tryParse(raw.replaceAll('.', '')) ?? 0;
+    return NumberFormat.decimalPattern('id_ID').format(number);
+  }
+
+  String _unformatNumber(String formatted) {
+    return formatted.replaceAll('.', '');
+  }
+
   @override
   Widget build(BuildContext context) {
     final style = stateManager.style;
@@ -260,8 +338,23 @@ class PlutoColumnFilterState extends PlutoStateWithChange<PlutoColumnFilter> {
               controller: _controller,
               enabled: _enabled,
               style: style.cellTextStyle,
+              keyboardType:
+              _isNumberColumn ? TextInputType.number : TextInputType.text,
               onTap: _handleOnTap,
-              onChanged: _handleOnChanged,
+              // onChanged: _handleOnChanged,
+              onChanged: (value) {
+                if (_isNumberColumn) {
+                  final raw = _unformatNumber(value);
+                  final formatted = _format(raw);
+                  // _controller.value = _controller.value.copyWith(
+                  //   text: formatted,
+                  //   selection: TextSelection.collapsed(offset: formatted.length),
+                  // );
+                  _handleOnChanged(raw);
+                } else {
+                  _handleOnChanged(value);
+                }
+              },
               onEditingComplete: _handleOnEditingComplete,
               decoration: InputDecoration(
                 hintText: _enabled ? widget.column.defaultFilter.title : '',

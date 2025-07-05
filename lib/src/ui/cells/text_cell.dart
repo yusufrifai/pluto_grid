@@ -233,7 +233,6 @@ mixin TextCellState<T extends TextCell> on State<T> implements TextFieldProps {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _textController.selection = TextSelection.collapsed(offset: _textController.text.length);
       });
-
       _hasHandledFirstFocus = true;
     }
   }

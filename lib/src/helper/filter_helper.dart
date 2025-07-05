@@ -2,6 +2,9 @@ import 'package:collection/collection.dart' show IterableExtension;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pluto_grid/pluto_grid.dart';
+import 'package:collection/collection.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
 typedef SetFilterPopupHandler = void Function(
     PlutoGridStateManager? stateManager);
@@ -180,6 +183,17 @@ class FilterHelper {
     return false;
   }
 
+  static String _formatNumber(String raw) {
+    if (raw.trim().isEmpty) return '';
+    final number = int.tryParse(raw.replaceAll('.', ''));
+    if (number == null) return '';
+    return NumberFormat.decimalPattern('id_ID').format(number);
+  }
+
+  static String _unformatNumber(String formatted) {
+    return formatted.replaceAll('.', '');
+  }
+
   /// Opens a pop-up for filtering.
   static void filterPopup(FilterPopupState popupState) {
     PlutoGridPopup(
@@ -191,11 +205,33 @@ class FilterHelper {
       rows: popupState.filterRows,
       configuration: popupState.configuration,
       onLoaded: popupState.onLoaded,
-      onChanged: popupState.onChanged,
+      onChanged: (event) {
+        popupState.onChanged(event); // tetap panggil yang asli
+
+        // Tambahan logika untuk format angka
+        final column = event.column;
+        if (column.field == FilterHelper.filterFieldValue) {
+          final row = event.row;
+          final fieldColumn = row!.cells[FilterHelper.filterFieldColumn]?.value;
+          final targetColumn = popupState.columns.firstWhereOrNull((c) => c.field == fieldColumn);
+
+          final isNumberColumn = targetColumn?.type is PlutoColumnTypeNumber;
+
+          if (isNumberColumn) {
+            final raw = _unformatNumber(event.value.toString());
+            final formatted = _formatNumber(raw);
+
+            row.cells[column.field]!.value = raw;
+
+            popupState._stateManager?.notifyListeners();
+          }
+        }
+      },
       onSelected: popupState.onSelected,
       mode: PlutoGridMode.popup,
     );
   }
+
 
   /// 'or' comparison with null values
   static bool compareOr(bool? a, bool b) {
@@ -383,6 +419,17 @@ class FilterPopupState {
   PlutoGridStateManager? _stateManager;
   List<PlutoRow?> _previousFilterRows;
 
+  String _formatNumber(String raw) {
+    if (raw.isEmpty) return '';
+    final number = int.tryParse(raw.replaceAll('.', '')) ?? 0;
+    return NumberFormat.decimalPattern('id_ID').format(number);
+  }
+
+  String _unformatNumber(String formatted) {
+    return formatted.replaceAll('.', '');
+  }
+
+
   void onLoaded(PlutoGridOnLoadedEvent e) {
     _stateManager = e.stateManager;
 
@@ -405,6 +452,7 @@ class FilterPopupState {
     _stateManager!.notifyListeners();
 
     _stateManager!.addListener(stateListener);
+
   }
 
   void onChanged(PlutoGridOnChangedEvent e) {
@@ -458,6 +506,18 @@ class FilterPopupState {
     return columnMap;
   }
 
+  static bool _isTargetColumnNumber(
+      PlutoColumnRendererContext context,
+      List<PlutoColumn> allColumns,
+      ) {
+    final columnField = context.row.cells[FilterHelper.filterFieldColumn]?.value;
+    final targetColumn = allColumns.firstWhereOrNull(
+          (col) => col.field == columnField,
+    );
+    return targetColumn?.type is PlutoColumnTypeNumber;
+  }
+
+
   List<PlutoColumn> _makeFilterColumns({
     required PlutoGridConfiguration configuration,
     required List<PlutoColumn> columns,
@@ -493,6 +553,16 @@ class FilterPopupState {
         field: FilterHelper.filterFieldValue,
         type: PlutoColumnType.text(),
         enableFilterMenuItem: false,
+        renderer: (context) {
+          final isNumber = _isTargetColumnNumber(context, columns);
+          final raw = context.cell.value.toString();
+          if (isNumber) {
+            final value = int.tryParse(raw.replaceAll('.', '')) ?? 0;
+            return Text(NumberFormat.decimalPattern('id_ID').format(value));
+          }
+          return Text(raw);
+        },
+        applyFormatterInEditing: false,
       ),
     ];
   }
